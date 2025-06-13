@@ -10,12 +10,15 @@ const contactRoute = require('./routes/contactRoute'); // NEW: Import contact ro
 const reviewRoute = require('./routes/reviewRoute'); // NEW: Import review routes
 
 const cookieParser = require('cookie-parser'); // NEW: Import cookie-parser
-
+// NEW: Import Swagger dependencies
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger'); // Assuming swagger.js is in your project root
 console.log('EMAIL_USER:', process.env.EMAIL_USER);
 console.log('EMAIL_PASS (first 5 chars):', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.substring(0, 5) + '...' : 'Not loaded');
 console.log('APP_URL:', process.env.APP_URL);
 
-
+// Swagger route
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(express.json());
 // NEW: Add middleware for parsing URL-encoded data
 // This is good practice for handling various form submissions, even if Multer handles multipart.
