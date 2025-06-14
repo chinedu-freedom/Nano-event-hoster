@@ -13,6 +13,7 @@ const {
   resetPassword,
   requestPasswordOtp,
   confirmOtp,
+   googleSignIn,
 } = require("../controllers/authController");
 
 /**
@@ -118,6 +119,129 @@ router.post("/signup", signupValidator, signup);
  *         $ref: '#/components/responses/ServerError'
  */
 router.post("/login", loginValidator, login);
+
+
+/**
+ * @swagger
+ * /auth/google-login:
+ *   post:
+ *     summary: Sign in or sign up with Google
+ *     tags: [Auth]
+ *     description: Authenticates a user using a Google ID token from the frontend. Creates a new user if one doesn't exist.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - idToken
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *                 description: The Google ID token received from the frontend after user signs in with Google.
+ *                 example: eyJhbGciOiJSUzI1NiIsImtpZCI6IjZmOGQ1OGIwMjE0NzU3NmE2YTUyZDM2YzU1ZjU2MzFhYmE0ZDc0MmQiLCJ0eXAiOiJKV1QifQ...
+ *     responses:
+ *       200:
+ *         description: Google sign-in successful. Returns app JWT token.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Google sign-in successful!
+ *                 token:
+ *                   type: string
+ *                   example: your_app_jwt_token_here
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: 60d0fe4f5311361c40212f00
+ *                     username:
+ *                       type: string
+ *                       example: GoogleUser
+ *                     email:
+ *                       type: string
+ *                       example: google.user@example.com
+ *                     isEmailVerified:
+ *                       type: boolean
+ *                       example: true
+ *                     provider:
+ *                       type: string
+ *                       example: google
+ *                     profilePicture:
+ *                       type: string
+ *                       example: https://lh3.googleusercontent.com/a/ABCDEFGHIJKLMNO=s96-c
+ *       201:
+ *         description: Google sign-up successful. Returns app JWT token.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Google sign-up successful!
+ *                 token:
+ *                   type: string
+ *                   example: your_app_jwt_token_here
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: 60d0fe4f5311361c40212f00
+ *                     username:
+ *                       type: string
+ *                       example: NewGoogleUser
+ *                     email:
+ *                       type: string
+ *                       example: new.google.user@example.com
+ *                     isEmailVerified:
+ *                       type: boolean
+ *                       example: true
+ *                     provider:
+ *                       type: string
+ *                       example: google
+ *                     profilePicture:
+ *                       type: string
+ *                       example: https://lh3.googleusercontent.com/a/ABCDEFGHIJKLMNO=s96-c
+ *       400:
+ *         description: Bad Request (missing ID token)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized (invalid or expired Google ID token)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       409:
+ *         description: Conflict (email already registered with a different social provider)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal Server Error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/google-login', googleSignIn);
 
 /**
  * @swagger

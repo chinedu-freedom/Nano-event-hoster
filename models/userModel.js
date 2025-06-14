@@ -1,22 +1,23 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
-const crypto = require("crypto");
+const bcrypt = require("bcryptjs"); // For hashing passwords (if still used)
+const jwt = require("jsonwebtoken"); // For generating JWTs (if still used)
+const crypto = require("crypto"); // For generating tokens
 
 const UserSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      required: [true, "Username is required"],
+      required: [true, "Please provide a username"],
       unique: true,
       trim: true,
       minlength: 3,
     },
     email: {
       type: String,
-      required: [true, "Email is required"],
+      required: [true, "Please provide an email"],
       unique: true,
-      trim: true,
       lowercase: true,
+      trim: true,
       match: [
         /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
         "Please provide a valid email",
@@ -24,54 +25,49 @@ const UserSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
-      minlength: 8,
-      select: false,
+      // Make password required ONLY if provider is 'email/password'
+      // This will be handled in the controller logic if needed,
+      // or set this to 'false' if social login users don't need a password.
+      required: function() {
+        return this.provider === 'email/password'; // Only required for traditional signups
+      },
+      minlength: [6, "Password must be at least 6 characters long"],
+      select: false, // Don't return password by default in queries
     },
     isEmailVerified: {
       type: Boolean,
-      default: false,
+      default: false, // Keep default false for traditional signup verification
     },
     emailVerificationToken: String,
     emailVerificationExpires: Date,
-
-    // Existing fields for the original token-based reset
     passwordResetToken: String,
     passwordResetExpires: Date,
-
-    // --- NEW FIELDS FOR OTP-BASED PASSWORD RESET ---
-    passwordResetOtp: String,             // To store the hashed OTP
-    passwordResetOtpExpires: Date,        // To store the OTP's expiration time
-    passwordResetAttemptCount: {          // To track failed OTP attempts
-      type: Number,
-      default: 0
+    otp: String,
+    otpExpires: Date,
+    otpAttempts: { type: Number, default: 0 },
+    otpLockUntil: Date,
+    // --- NEW FIELDS FOR SOCIAL LOGIN ---
+    provider: { // e.g., 'email/password', 'google', 'facebook'
+      type: String,
+      default: 'email/password',
+      enum: ['email/password', 'google', 'facebook', 'apple'] // Add more providers as needed
     },
-    passwordResetLockUntil: Date,         // To lock out user after too many failed attempts
-    // Note: The passwordChangeToken concept is now integrated into passwordResetToken
-    // after OTP confirmation to reuse the existing resetPassword endpoint.
+    providerId: { // Unique ID from the social provider (e.g., Google's 'sub' field)
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values, so it's not unique for email/password users
+    },
+    profilePicture: String, // Optional: for storing social profile pictures
     // --- END NEW FIELDS ---
-
-    refreshToken: {
-      type: String,
-      default: null,
-    },
-    refreshTokenExpires: {
-      type: Date,
-      default: null,
-    },
-    role: {
-      type: String,
-      enum: ["user", "admin"],
-      default: "user",
-    },
   },
-  { timestamps: true }
+  {
+    timestamps: true, // Adds createdAt and updatedAt fields
+  }
 );
 
+// Hash password before saving (only if it's an email/password signup and password is modified)
 UserSchema.pre("save", async function (next) {
-  // console.log("Pre-save hook triggered for user:", this.username, "Password modified:", this.isModified("password"));
-
-  if (!this.isModified("password")) {
+  if (!this.isModified("password") || this.provider !== 'email/password') {
     return next();
   }
   const salt = await bcrypt.genSalt(10);
@@ -79,48 +75,38 @@ UserSchema.pre("save", async function (next) {
   next();
 });
 
-UserSchema.methods.comparePassword = async function (canditatePassword) {
-  // console.log("comparePassword method called. Candidate:", canditatePassword, "Stored hash:", this.password);
-  return await bcrypt.compare(canditatePassword, this.password);
+// Compare password method (for login)
+UserSchema.methods.matchPassword = async function (enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Method for the original token-based password reset AND for generating
-// the post-OTP token to be used by the generic resetPassword endpoint.
-UserSchema.methods.getResetPasswordToken = function () {
-  const resetToken = crypto.randomBytes(32).toString("hex"); // Generate random 32 bytes
-  this.passwordResetToken = crypto
+// Generate JWT token
+UserSchema.methods.getSignedJwtToken = function () {
+  return jwt.sign({ userId: this._id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.EXPIRES_IN,
+  });
+};
+
+// Generate email verification token (for traditional email verification)
+UserSchema.methods.getEmailVerificationToken = function () {
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  this.emailVerificationToken = crypto
     .createHash("sha256")
-    .update(resetToken)
+    .update(verificationToken)
     .digest("hex");
-  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // Token valid for 10 minutes
-
-  return resetToken; // Return the unhashed token to be sent to the user
-};
-
-UserSchema.methods.getVerificationToken = function () {
-  const verificationToken = crypto.randomBytes(20).toString("hex");
-  this.emailVerificationToken = verificationToken;
   this.emailVerificationExpires = Date.now() + 3600000; // 1 hour
   return verificationToken;
 };
 
-// --- NEW METHOD FOR OTP-BASED PASSWORD RESET (GENERATION) ---
-UserSchema.methods.generatePasswordResetOtp = async function() {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Generates 100000-999999
-
-  this.passwordResetOtp = await bcrypt.hash(otp, 10);
-  this.passwordResetOtpExpires = Date.now() + 10 * 60 * 1000; // OTP valid for 10 minutes
-
-  this.passwordResetAttemptCount = 0;
-  this.passwordResetLockUntil = undefined;
-
-  // No this.save() here; controller will call it.
-  return otp; // Return the plain OTP to be sent via email
-};
-
-// --- NEW METHOD FOR OTP-BASED PASSWORD RESET (COMPARISON) ---
-UserSchema.methods.comparePasswordResetOtp = async function(candidateOtp) {
-  return await bcrypt.compare(candidateOtp, this.passwordResetOtp);
+// Generate password reset token
+UserSchema.methods.getResetPasswordToken = function () {
+  const resetToken = crypto.randomBytes(20).toString("hex");
+  this.passwordResetToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+  return resetToken;
 };
 
 module.exports = mongoose.model("User", UserSchema);

@@ -6,7 +6,11 @@ const options = {
     info: {
       title: 'Nano-Event API Documentation', // Your API title
       version: '1.0.0', // Your API version
-      description: 'API documentation for the Nano-Event platform.',
+      description: 'API documentation for the Nano-Event platform, including authentication, event management, contact forms, and review submissions. **Remember to replace placeholder IDs/URLs with your actual values, especially the Google Client ID.**',
+      contact: {
+        name: 'Nano-Event Support',
+        email: 'support@nanoevent.com', // Replace with your support email
+      },
     },
     // Define servers (e.g., development, production)
     servers: [
@@ -20,15 +24,45 @@ const options = {
       //   description: 'Production Server',
       // },
     ],
-    // Define Security Schemes (e.g., JWT Bearer Token)
+    // Define Security Schemes (e.g., JWT Bearer Token, Google OAuth)
     components: {
       securitySchemes: {
         BearerAuth: {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: 'Enter your JWT Bearer token in the format: `Bearer YOUR_TOKEN`',
+          description: 'Enter your application\'s JWT Bearer token in the format: `Bearer YOUR_TOKEN`',
         },
+        // --- NEW: Google OAuth2.0 Security Scheme ---
+        GoogleOAuth: {
+          type: 'oauth2',
+          description: 'Google Sign-In authentication flow. The frontend obtains an ID token from Google, which is then sent to the backend for verification.',
+          // Define the OAuth flows
+          flows: {
+            implicit: { // Common for client-side web apps getting ID Token directly
+              authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+              scopes: {
+                'openid': 'Required for ID token',
+                'email': 'Access to user\'s email address',
+                'profile': 'Access to user\'s profile information (name, picture)',
+              },
+            },
+            // You could also add 'authorizationCode' flow if your backend directly handles Google redirects
+            // authorizationCode: {
+            //   authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+            //   tokenUrl: 'https://oauth2.googleapis.com/token',
+            //   scopes: {
+            //     'openid': 'Required for ID token',
+            //     'email': 'Access to user\'s email address',
+            //     'profile': 'Access to user\'s profile information',
+            //   },
+            // },
+          },
+          // Custom extension to display the Google Client ID for reference
+          // Note: This is an 'x-` extension and is for documentation clarity, not part of standard OAuth2 spec.
+          'x-google-client-id': process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID_GOES_HERE',
+        },
+        // --- END NEW Google OAuth2.0 Security Scheme ---
       },
       // Define all reusable schemas here
       schemas: {
@@ -73,10 +107,12 @@ const options = {
             username: { type: 'string', example: "testuser" },
             email: { type: 'string', format: 'email', example: "user@example.com" },
             isEmailVerified: { type: 'boolean', example: true },
+            provider: { type: 'string', example: "email/password", enum: ['email/password', 'google', 'facebook', 'apple'] },
+            profilePicture: { type: 'string', format: 'url', example: "https://lh3.googleusercontent.com/a/ABCDEFGHIJKLMNO=s96-c" },
             createdAt: { type: 'string', format: 'date-time', example: "2025-06-12T01:00:00.000Z" },
             updatedAt: { type: 'string', format: 'date-time', example: "2025-06-12T01:00:00.000Z" },
           },
-          required: ['id', 'username', 'email', 'isEmailVerified'],
+          required: ['id', 'username', 'email', 'isEmailVerified', 'provider'],
         },
 
         // --- Reusable Event Schema ---
@@ -127,12 +163,8 @@ const options = {
       },
     },
   },
-  // This wildcard will include all .js files directly inside the 'routes' folder.
-  // Make sure your JSDoc comments are actually within these files.
   apis: [
     './routes/*.js',
-    // './middlewares/validators/*.js', // Keep this commented unless you add Swagger JSDoc here
-    // './controllers/*.js', // Keep this commented unless you add Swagger JSDoc here
   ],
 };
 

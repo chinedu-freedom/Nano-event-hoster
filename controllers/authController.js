@@ -3,6 +3,7 @@ const User = require("../models/userModel");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const { OAuth2Client } = require('google-auth-library'); // NEW: Import Google Auth Library
 const sendEmail = require("../utils/emailSender");
 const {
   ConflictError,
@@ -12,6 +13,15 @@ const {
   InternalServerError,
 } = require("../utils/customErrors");
 
+// You need to create an OAuth 2.0 Client ID in Google Cloud Console
+
+// APIs & Services -> Credentials -> Create Credentials -> OAuth client ID
+
+// Select 'Web application' or 'iOS'/'Android' depending on your frontend.
+
+// The CLIENT_ID will be something like: YOUR_CLIENT_ID.apps.googleusercontent.com
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID); // NEW
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   console.error("FATAL ERROR: JWT_SECRET is not defined in environment variables.");
@@ -155,6 +165,194 @@ const login = async (req, res) => {
   }
 };
 
+
+const googleSignIn = async (req, res, next) => {
+
+  const { idToken } = req.body; // The ID Token received from Google on the frontend
+
+
+
+  if (!idToken) {
+
+    return next(new BadRequestError("Google ID token is required."));
+
+  }
+
+
+
+  try {
+
+    const ticket = await googleClient.verifyIdToken({
+
+      idToken: idToken,
+
+      audience: process.env.GOOGLE_CLIENT_ID, // Verify that the token is for your app
+
+    });
+
+
+
+    const payload = ticket.getPayload();
+
+    // Payload contains verified user information from Google
+
+    const { sub: googleId, email, name, picture } = payload;
+
+
+
+    // Check if user already exists in your database
+
+    let user = await User.findOne({ email });
+
+
+
+    if (user) {
+
+      // User exists, check if it's a traditional user or social user from a different provider
+
+      if (user.provider === 'email/password' && !user.providerId) {
+
+        // Existing email/password user, but now trying to link Google
+
+        // You might prompt them to link accounts, or just log them in
+
+        // For simplicity, we'll log them in, assuming they now prefer Google sign-in
+
+        user.provider = 'google';
+
+        user.providerId = googleId;
+
+        user.isEmailVerified = true; // Google verifies email automatically
+
+        if (name && !user.username) user.username = name.split(' ')[0]; // Use first name as username if not set
+
+        if (picture && !user.profilePicture) user.profilePicture = picture;
+
+        await user.save({ validateBeforeSave: false }); // Save updates
+
+      } else if (user.provider !== 'google' && user.providerId) {
+
+        // User exists with same email but from a *different* social provider (e.g., Facebook)
+
+        return next(new ConflictError(`This email is already registered via ${user.provider}. Please use that method to sign in.`));
+
+      } else if (user.provider === 'google' && user.providerId !== googleId) {
+
+        // Edge case: Same email, but different Google ID (highly unlikely but possible if Google changes sub or old data is bad)
+
+        console.warn('Google sign-in: Email exists but providerId mismatch. Updating providerId.');
+
+        user.providerId = googleId;
+
+        await user.save({ validateBeforeSave: false });
+
+      }
+
+
+
+      // If user exists and is consistent, log them in
+
+      const token = user.getSignedJwtToken();
+
+      return res.status(200).json({
+
+        success: true,
+
+        message: "Google sign-in successful!",
+
+        token,
+
+        user: {
+
+          id: user._id,
+
+          username: user.username,
+
+          email: user.email,
+
+          isEmailVerified: user.isEmailVerified,
+
+          provider: user.provider,
+
+          profilePicture: user.profilePicture,
+
+        },
+
+      });
+
+
+
+    } else {
+
+      // User does NOT exist, create a new user account
+
+      const newUser = await User.create({
+
+        username: name || email.split('@')[0], // Use full name or part of email as username
+
+        email: email,
+
+        isEmailVerified: true, // Google verifies emails
+
+        provider: 'google',
+
+        providerId: googleId,
+
+        profilePicture: picture,
+
+        // No password needed for social login user as per model update
+
+      });
+
+
+
+      const token = newUser.getSignedJwtToken();
+
+      res.status(201).json({
+
+        success: true,
+
+        message: "Google sign-up successful!",
+
+        token,
+
+        user: {
+
+          id: newUser._id,
+
+          username: newUser.username,
+
+          email: newUser.email,
+
+          isEmailVerified: newUser.isEmailVerified,
+
+          provider: newUser.provider,
+
+          profilePicture: newUser.profilePicture,
+
+        },
+
+      });
+
+    }
+
+
+
+  } catch (error) {
+
+    console.error("Error during Google sign-in:", error);
+
+    if (error.name === 'TokenExpiredError' || error.name === 'JsonWebTokenError' || error.message.includes('No matching audience') || error.message.includes('Wrong issuer')) {
+
+      return next(new UnauthorizedError("Invalid or expired Google ID token. Please try signing in again."));
+
+    }
+
+    next(new InternalServerError("Google sign-in failed. Please try again."));
+
+  }
+
+};
 const verifyEmail = async (req, res) => {
   // console.log("Verification route hit!");
   const { token } = req.params;
@@ -499,4 +697,5 @@ module.exports = {
   resetPassword,
   requestPasswordOtp,
   confirmOtp,
+  googleSignIn
 };
