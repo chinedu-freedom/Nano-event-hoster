@@ -13,9 +13,7 @@ const cookieParser = require('cookie-parser'); // NEW: Import cookie-parser
 // NEW: Import Swagger dependencies
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger'); // Assuming swagger.js is in your project root
-console.log('EMAIL_USER:', process.env.EMAIL_USER);
-console.log('EMAIL_PASS (first 5 chars):', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.substring(0, 5) + '...' : 'Not loaded');
-console.log('APP_URL:', process.env.APP_URL);
+                                                
 
 // Swagger route
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -36,7 +34,8 @@ app.use((req, res, next) => {
   console.log(`Incoming request: ${req.method} ${req.originalUrl}`);
   next();
 });
-
+console.log("API is running");
+console.log("App URL:", process.env.APP_URL); // Log the APP_URL from .env
 // --- Routes ---
 app.use("/api/auth", authRoutes);
 app.use('/api/user', userRouter);
@@ -48,16 +47,16 @@ app.use('/api/reviews', reviewRoute); // NEW: Mount your review routes
 
 
 app.use(errorHandlerMiddleware);
-
+const PORT = process.env.PORT || 7000;
 const start = async () => {
   try {
     await connectDB(process.env.MONGO_URL);
     console.log("Connected to the database");
-    app.listen(process.env.PORT, () => {
-      console.log("Server is running on port 7000");
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
     });
   } catch (err) {
-    console.log("Error while connecting to the database");
+    console.log("Error while connecting to the database:", err);
   }
 };
 
