@@ -1,4 +1,4 @@
-const { CustomAPIError } = require("../utils/customErrors");
+const { CustomError } = require("../utils/customErrors");
 
 const errorHandlerMiddleware = (err, req, res, next) => {
   console.error("--- Global Error Handler ---");
@@ -24,14 +24,12 @@ const errorHandlerMiddleware = (err, req, res, next) => {
     customError.message = `No item found with id : ${err.value}`;
   }
 
-  if (err instanceof CustomAPIError) {
+  if (err instanceof CustomError) {
     customError.statusCode = err.statusCode;
     customError.message = err.message;
   }
 
-  return res
-    .status(customError.statusCode)
-    .json({ message: customError.message });
+  return res.status(customError.statusCode).json({ message: customError.message });
 };
 
 module.exports = errorHandlerMiddleware;
