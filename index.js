@@ -13,7 +13,13 @@ const cookieParser = require('cookie-parser'); // NEW: Import cookie-parser
 // NEW: Import Swagger dependencies
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger'); // Assuming swagger.js is in your project root
-                                                
+                
+const cors = require("cors");
+app.use(cors({
+  origin: "http://127.0.0.1:5500", // allow your frontend
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 
 // Swagger route
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
