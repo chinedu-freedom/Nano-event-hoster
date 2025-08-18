@@ -17,7 +17,7 @@ const swaggerSpec = require('./swagger'); // Assuming swagger.js is in your proj
 const cors = require("cors");
 app.use(cors({
   origin: "http://127.0.0.1:5500", // allow your frontend
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   credentials: true
 }));
 
