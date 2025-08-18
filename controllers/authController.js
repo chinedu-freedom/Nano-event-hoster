@@ -60,7 +60,13 @@ const signup = async (req, res) => {
     newUser.emailVerificationExpires = Date.now() + 3600000;
     await newUser.save();
 
-    const verificationLinkHtml = `<p>Please click the link to verify your email address:</p><a href="${process.env.APP_URL}/verificationPage/index.html/${verificationToken}">Verify Email</a><p>This token expires in 1 hr</p>`;
+const verificationLinkHtml = `
+  <p>Please click the link to verify your email address:</p>
+  <a href="${process.env.APP_URL}/verificationPage/index.html?token=${verificationToken}">
+    Verify Email
+  </a>
+  <p>This token expires in 1 hr</p>
+`;
     try {
       await sendEmail({
         to: newUser.email,
