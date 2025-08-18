@@ -41,7 +41,6 @@ app.use((req, res, next) => {
   next();
 });
 console.log("API is running");
-console.log("App URL:", process.env.APP_URL); // Log the APP_URL from .env
 // --- Routes ---
 app.use("/api/auth", authRoutes);
 app.use('/api/user', userRouter);

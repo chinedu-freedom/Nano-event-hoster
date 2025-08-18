@@ -22,7 +22,7 @@ const updateMe = async (req, res) => {
 
     const verificationToken = req.user.getVerificationToken();
 
-    const verificationURL = `${process.env.APP_URL}/verify-email/${verificationToken}`;
+    const verificationURL = `${process.env.APP_URL}/VerificationPage/index.html?token=${verificationToken}`;
 
     try {
       await sendEmail({
